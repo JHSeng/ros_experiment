@@ -1,0 +1,2 @@
+.
+-DCATKIN_DEVEL_PREFIX=/home/jhseng/catkin_ws/src/turtle_game/devel -DCMAKE_INSTALL_PREFIX=/home/jhseng/catkin_ws/src/turtle_game/install -G Unix Makefiles
