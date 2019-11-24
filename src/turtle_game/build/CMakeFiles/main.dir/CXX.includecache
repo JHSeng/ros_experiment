@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/jhseng/catkin_ws/src/turtle_game/src/main.cpp
+iostream
+-
+ros/ros.h
+-
+geometry_msgs/Twist.h
+-
+turtlesim/Pose.h
+-
+turtlesim/Color.h
+-
+
