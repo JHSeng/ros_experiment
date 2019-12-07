@@ -10,18 +10,12 @@
 
 geometry_msgs::Twist msg;
 
-void position_callback(const turtlesim::Pose &msg) {
-    // called function sign
-    ROS_INFO_STREAM(std::setprecision(2) << std::fixed << " position = (" << msg.x << " , " << msg.y << ") * direction = " << msg.theta);
-    // data init
-    int __curr_turtle_x = msg.x, __curr_turtle_y = msg.y, __curr_turtle_theta = msg.theta;
-
-}
-
+// print message information to stdIO
 void printInfo() {
     ROS_INFO_STREAM(std::setprecision(2) << std::fixed << "msg.linear.x = " << msg.linear.x << " , msg.angular.z = " << msg.angular.z);
 }
 
+// let turtle go straight
 void goForward(ros::Publisher &move_publisher) {
     for (int i = 1; i <= 50000; i++) {
         msg.linear.x = 1;
@@ -31,8 +25,10 @@ void goForward(ros::Publisher &move_publisher) {
     }
 }
 
+// let turtle draw a ractangle
 void drawRectangle(ros::Publisher &move_publisher) {
     goForward(move_publisher);
+    // the limit of i is not equal
     for (int i = 1; i <= 42325; i++) {
         msg.linear.x = 0;
         msg.angular.z = 1;
@@ -68,20 +64,26 @@ void drawRectangle(ros::Publisher &move_publisher) {
     }
 }
 
+// change background color of the program
 void changeBackgroundColor(ros::NodeHandle &nodeHandle) {
+    // rand a color
     int Red = 255 * double(rand()) / double(RAND_MAX);
     int Green = 255 * double(rand()) / double(RAND_MAX);
     int Bule = 255 * double(rand()) / double(RAND_MAX);
+    // set param of background
     ros::param::set("background_r", Red);
     ros::param::set("background_g", Green);
     ros::param::set("background_b", Bule);
+    // make a service client
     ros::ServiceClient clearClient = nodeHandle.serviceClient<std_srvs::Empty>("/clear");
     std_srvs::Empty srv;
     clearClient.call(srv);
 }
 
-void drawCircle(ros::NodeHandle &nodeHandle, ros::Publisher &move_publisher) {
+// let turtle draw a circle and change background color within some time
+void drawCircleAndChangeColor(ros::NodeHandle &nodeHandle, ros::Publisher &move_publisher) {
     for (int i = 1; i <= 150000; i++) {
+        // judge change background color
         if (i % 30000 == 0) changeBackgroundColor(nodeHandle);
         msg.linear.x = 1;
         msg.angular.z = 1;
@@ -90,29 +92,35 @@ void drawCircle(ros::NodeHandle &nodeHandle, ros::Publisher &move_publisher) {
     }
 }
 
+// let turtle draw a circle
+void drawCircle(ros::Publisher &move_publisher) {
+    for (int i = 1; i <= 150000; i++) {
+        msg.linear.x = 1;
+        msg.angular.z = 1;
+        move_publisher.publish(msg);
+        printInfo();
+    }
+}
 
+// main
 int main(int argc, char **argv) {
+    // ros init
     ros::init(argc, argv, "main");
     ros::NodeHandle nodeHandle;
-
-    // get turtle position
-    // ros::Subscriber position_subscriber = nodeHandle.subscribe("/turtle1/pose", 1000, position_callback);
-    // ros::spin();
+    srand(time(0));
 
     // publish signal to topic
     ros::Publisher move_publisher = nodeHandle.advertise<geometry_msgs::Twist>("/turtle1/cmd_vel", 1000);
-    srand(time(0));
-    ros::Rate rate(10);
 
-    // 画正方形
-    // drawRectangle(move_publisher);
+    // draw ractangle
+    drawRectangle(move_publisher);
 
-    // 画圆形
-    // drawCircle(move_publisher);
+    // draw a circle
+    drawCircle(move_publisher);
 
-    // 边画圆形边改变背景颜色
+    // draw a circle with background color changed
     while (ros::ok()) {
-        drawCircle(nodeHandle, move_publisher);
+        drawCircleAndChangeColor(nodeHandle, move_publisher);
         rate.sleep();
     }
     return 0;
