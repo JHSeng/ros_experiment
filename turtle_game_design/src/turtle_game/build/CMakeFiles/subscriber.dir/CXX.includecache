@@ -1,0 +1,16 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/jhseng/catkin_ws/src/turtle_game/src/subscriber.cpp
+iostream
+-
+ros/ros.h
+-
+std_msgs/Int32.h
+-
+
