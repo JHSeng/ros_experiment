@@ -1,8 +1,0 @@
-prefix=/home/jhseng/catkin_ws/src/turtle_game/install
-
-Name: turtle_game
-Description: Description of turtle_game
-Version: 0.1.0
-Cflags: 
-Libs: -L/home/jhseng/catkin_ws/src/turtle_game/install/lib 
-Requires: 
