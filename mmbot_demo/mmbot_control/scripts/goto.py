@@ -40,18 +40,12 @@ class Mmbot:
                     pow((goal_pose. pose.pose.position.y - self.odometry.pose.pose.position.y), 2))
 
     def linear_vel(self, goal_pose, constant=0.2):
-        """See video: https://www.youtube.com/watch?v=Qh15Nol5htM."""
         return constant * self.euclidean_distance(goal_pose)
 
     def steering_angle(self, goal_pose):
-        """See video: https://www.youtube.com/watch?v=Qh15Nol5htM."""
-
-        # print  atan2(goal_pose.pose.pose.position.y - self.odometry.pose.pose.position.y, goal_pose.pose.pose.position.x - self.odometry.pose.pose.position.x)
         return atan2(goal_pose.pose.pose.position.y - self.odometry.pose.pose.position.y, goal_pose.pose.pose.position.x - self.odometry.pose.pose.position.x)
 
     def angular_vel(self, goal_pose, constant=1):
-        """See video: https://www.youtube.com/watch?v=Qh15Nol5htM."""
-
         p = euler_from_quaternion((self.odometry.pose.pose.orientation.x,
                                    self.odometry.pose.pose.orientation.y,
                                    self.odometry.pose.pose.orientation.z,
@@ -62,56 +56,29 @@ class Mmbot:
 
     def move2goal(self):
         self.rate.sleep()
-        """Moves the turtle to the goal."""
         goal_pose = Odometry()
-
-        # Get the input from the user.
         goal_pose.pose.pose.position.x = input("Set your x goal: ")
         goal_pose.pose.pose.position.y = input("Set your y goal: ")
-
-        # Please, insert a number slightly greater than 0 (e.g. 0.01).
         distance_tolerance = input("Set your tolerance: ")
-
         vel_msg = Twist()
-
         while self.euclidean_distance(goal_pose) >= distance_tolerance:
-
-            # Porportional controller.
-            # https://en.wikipedia.org/wiki/Proportional_control
-
-            # Linear velocity in the x-axis.
-            # if(self.angular_vel(goal_pose)<0.009):
             vel_msg.linear.x = self.linear_vel(goal_pose)
             vel_msg.linear.y = 0
             vel_msg.linear.z = 0
-
-            # else:
-            #     vel_msg.linear.x = 0
-
-            # Angular velocity in the z-axis.
             vel_msg.angular.x = 0
             vel_msg.angular.y = 0
             vel_msg.angular.z = -self.angular_vel(goal_pose)
-
-            # Publishing our vel_msg
-
             self.velocity_publisher.publish(vel_msg)
-
-            # Publish at the desired rate.
             self.rate.sleep()
-
-        # Stopping our robot after the movement is over.
         vel_msg.linear.x = 0
         vel_msg.angular.z = 0
         self.velocity_publisher.publish(vel_msg)
-
-        # If we press control + C, the node will stop.
         rospy.spin()
 
 
 if __name__ == '__main__':
     try:
-        x = Mmbot()
-        x.move2goal()
+        mmbot = Mmbot()
+        mmbot.move2goal()
     except rospy.ROSInterruptException:
         pass
