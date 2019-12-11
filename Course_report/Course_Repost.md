@@ -1,4 +1,4 @@
-# Analysis of Arduino core lib
+# Analysis of Arduino core code
 
 Author: TzeHim Sung   Date: 04/12/2019  
 
@@ -27,7 +27,7 @@ Arduino项目始于2003年，作为意大利伊夫雷亚地区伊夫雷亚交互
 
 <img src="/home/jhseng/ros_experiment/Course_report/res/Screenshot_20191210_165556.png" style="zoom: 50%;" />
 
-共44个文件。我们先从最易理解的、且为程序的入口`main.cpp`开始分析。
+共44个文件。让我们先从最易理解的程序入口`main.cpp`开始分析。
 
 ## Analysis of main.cpp
 
@@ -38,46 +38,53 @@ Arduino项目始于2003年，作为意大利伊夫雷亚地区伊夫雷亚交互
 ```c++
 #include <Arduino.h>
 
-// Declared weak in Arduino.h to allow user redefinitions.
-int atexit(void (* /*func*/ )()) { return 0; }
+// 直接返回
+int atexit(void ( * /*func*/ )()) {
+    return 0;
+}
 
-// Weak empty variant initialization function.
-// May be redefined by variant files.
+// 在Arduino.h中声明为弱允许用户重新定义。
 void initVariant() __attribute__((weak));
 void initVariant() { }
-
+// USB设置
 void setupUSB() __attribute__((weak));
 void setupUSB() { }
 
-int main(void)
-{
-	init();
-
-	initVariant();
-
+int main(void) {
+    init();
+    initVariant();
 #if defined(USBCON)
-	USBDevice.attach();
+    USBDevice.attach();
 #endif
-	
-	setup();
-    
-	for (;;) {
-		loop();
-		if (serialEventRun) serialEventRun();
-	}
-        
-	return 0;
+    // 运行用户所定义的初始化行为
+    setup();
+    for (;;) {
+        // 运行用户所定义的循环行为
+        loop();
+        // 执行串口通信
+        if (serialEventRun) serialEventRun();
+    }
+    return 0;
 }
-
 ```
 
 `main.cpp`include了`Arduino.h`。在`int main(void)`中，经过了`init()`和`USBDevice.attach()`之后，Arduino板便开始执行`setup()`、`loop()`和`serialEventRun()`(如果有串口通信的话)。
 
 ## Analysis of Arduino.h
 
+在`main.cpp`中include了`Arduino.h`这一头文件。该头文件为Arduino SDK基础部分。该头文件声明了大部分常量、串口通信、位读写操作、引脚操作、延迟、电平时间测量、中断等系统基础功能。
 
+## Analysis of WCharacter.h && WString.h
 
+`WCharacter.h`比较简单，只是声明并定义了常见字符操作而已。相比之下，`WString.h`声明并定义了关于字符串的常见操作。
 
+## Analysis of HardwareSerial.h
+
+定义了串口动作。这里依赖到`Stream.h`。
+
+## Analysis of Stream.h
+
+定义了流操作。
 
 ## Reference
 

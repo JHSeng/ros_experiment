@@ -4,23 +4,11 @@
 
 #ifndef HardwareSerial_h
 #define HardwareSerial_h
-
 #include <inttypes.h>
-
 #include "Stream.h"
-
-// Define constants and variables for buffering incoming serial data.  We're
-// using a ring buffer (I think), in which head is the index of the location
-// to which to write the next incoming character and tail is the index of the
-// location from which to read.
-// NOTE: a "power of 2" buffer size is reccomended to dramatically
-//       optimize all the modulo operations for ring buffers.
-// WARNING: When buffer sizes are increased to > 256, the buffer index
-// variables are automatically increased in size, but the extra
-// atomicity guards needed for that are not implemented. This will
-// often work, but occasionally a race condition can occur that makes
-// Serial behave erratically. See https://github.com/arduino/Arduino/issues/2405
-#if !defined(SERIAL_TX_BUFFER_SIZE)
+// 定义用于缓冲传入串行数据的常量和变量，使用环形缓冲区，其中head是位置的索引，向其写入下一个传入字符，并且尾部为的索引从中读取的位置。
+// 建议缓冲区的大小为二的幂次以优化环形缓冲区的所有模运算
+// 警告：当缓冲区大小增加到>256时，缓冲区索引变量会自动增加大小，但多余的部分所需的原子防护未实现。通常来说可以正常工作，但偶尔会有串行行为异常。
 #if ((RAMEND - RAMSTART) < 1023)
 #define SERIAL_TX_BUFFER_SIZE 16
 #else
@@ -44,8 +32,7 @@ typedef uint16_t rx_buffer_index_t;
 #else
 typedef uint8_t rx_buffer_index_t;
 #endif
-
-// Define config for Serial.begin(baud, config);
+// 为Serial.begin(baud，config)定义配置
 #define SERIAL_5N1 0x00
 #define SERIAL_6N1 0x02
 #define SERIAL_7N1 0x04
@@ -79,20 +66,15 @@ protected:
     volatile uint8_t *const _ucsrb;
     volatile uint8_t *const _ucsrc;
     volatile uint8_t *const _udr;
-    // Has any byte been written to the UART since begin()
+    // 从begin()开始是否将任何字节写入UART
     bool _written;
-
     volatile rx_buffer_index_t _rx_buffer_head;
     volatile rx_buffer_index_t _rx_buffer_tail;
     volatile tx_buffer_index_t _tx_buffer_head;
     volatile tx_buffer_index_t _tx_buffer_tail;
-
-    // Don't put any members after these buffers, since only the first
-    // 32 bytes of this struct can be accessed quickly using the ldd
-    // instruction.
+    // 不能将任何成员放在这些缓冲区之后，因为只有第一个可使用ldd快速访问此结构的32个字节指令
     unsigned char _rx_buffer[SERIAL_RX_BUFFER_SIZE];
     unsigned char _tx_buffer[SERIAL_TX_BUFFER_SIZE];
-
 public:
     inline HardwareSerial(
         volatile uint8_t *ubrrh, volatile uint8_t *ubrrl,
@@ -121,12 +103,11 @@ public:
     inline size_t write(int n) {
         return write((uint8_t)n);
     }
-    using Print::write; // pull in write(str) and write(buf, size) from Print
+    using Print::write; // 从Print中获取write(str)和write(buf，size)
     operator bool() {
         return true;
     }
-
-    // Interrupt handlers - Not intended to be called externally
+    // 中断处理程序，这不应在外部调用
     inline void _rx_complete_irq(void);
     void _tx_udr_empty_irq(void);
 };
@@ -147,7 +128,5 @@ extern HardwareSerial Serial2;
 extern HardwareSerial Serial3;
 #define HAVE_HWSERIAL3
 #endif
-
 extern void serialEventRun(void) __attribute__((weak));
-
 #endif

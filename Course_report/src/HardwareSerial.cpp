@@ -12,30 +12,23 @@
 #include "HardwareSerial.h"
 #include "HardwareSerial_private.h"
 
-// this next line disables the entire HardwareSerial.cpp,
-// this is so I can support Attiny series and any other chip without a uart
+// 下一行将禁用整个HardwareSerial.cpp，
+// 这样就可以在没有uart的情况下支持Attiny系列和任何其他芯片
 #if defined(HAVE_HWSERIAL0) || defined(HAVE_HWSERIAL1) || defined(HAVE_HWSERIAL2) || defined(HAVE_HWSERIAL3)
-
-// SerialEvent functions are weak, so when the user doesn't define them,
-// the linker just sets their address to 0 (which is checked below).
-// The Serialx_available is just a wrapper around Serialx.available(),
-// but we can refer to it weakly so we don't pull in the entire
-// HardwareSerial instance if the user doesn't also refer to it.
+// SerialEvent函数比较弱，因此当用户未定义它们时，链接器仅将其地址设置为0（在下面进行检查）。
+// Serialx_available只是Serialx.available（）的包装，但我们可以较弱地引用它，因此我们不会将其全部HardwareSerial实例化（如果用户也未引用它）。
 #if defined(HAVE_HWSERIAL0)
 void serialEvent() __attribute__((weak));
 bool Serial0_available() __attribute__((weak));
 #endif
-
 #if defined(HAVE_HWSERIAL1)
 void serialEvent1() __attribute__((weak));
 bool Serial1_available() __attribute__((weak));
 #endif
-
 #if defined(HAVE_HWSERIAL2)
 void serialEvent2() __attribute__((weak));
 bool Serial2_available() __attribute__((weak));
 #endif
-
 #if defined(HAVE_HWSERIAL3)
 void serialEvent3() __attribute__((weak));
 bool Serial3_available() __attribute__((weak));

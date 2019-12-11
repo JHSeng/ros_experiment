@@ -1,128 +1,95 @@
-/*
-  Stream.h - base class for character-based streams.
-  Copyright (c) 2010 David A. Mellis.  All right reserved.
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
-  parsing functions based on TextFinder library by Michael Margolis
-*/
-
 #ifndef Stream_h
 #define Stream_h
-
 #include <inttypes.h>
 #include "Print.h"
-
-// compatability macros for testing
-/*
-#define   getInt()            parseInt()
-#define   getInt(ignore)    parseInt(ignore)
-#define   getFloat()          parseFloat()
-#define   getFloat(ignore)  parseFloat(ignore)
-#define   getString( pre_string, post_string, buffer, length)
-readBytesBetween( pre_string, terminator, buffer, length)
-*/
-
-// This enumeration provides the lookahead options for parseInt(), parseFloat()
-// The rules set out here are used until either the first valid character is found
-// or a time out occurs due to lack of input.
-enum LookaheadMode{
-    SKIP_ALL,       // All invalid characters are ignored.
-    SKIP_NONE,      // Nothing is skipped, and the stream is not touched unless the first waiting character is valid.
-    SKIP_WHITESPACE // Only tabs, spaces, line feeds & carriage returns are skipped.
+// 这里的枚举为parseInt(), parseFloat()提供了选项。可以使用这里的规则直到找到第一个有效字符为止。
+enum LookaheadMode {
+    SKIP_ALL,       // 忽略所有无效字符
+    SKIP_NONE,      // 不跳过任何内容，且不会触碰流，除非第一个等待的字符有效
+    SKIP_WHITESPACE // 仅跳过制表符、空格、换行符和回车
 };
-
-#define NO_IGNORE_CHAR  '\x01' // a char not found in a valid ASCII numeric field
-
-class Stream : public Print
-{
-  protected:
-    unsigned long _timeout;      // number of milliseconds to wait for the next char before aborting timed read
-    unsigned long _startMillis;  // used for timeout measurement
-    int timedRead();    // read stream with timeout
-    int timedPeek();    // peek stream with timeout
-    int peekNextDigit(LookaheadMode lookahead, bool detectDecimal); // returns the next numeric digit in the stream or -1 if timeout
-
-  public:
+#define NO_IGNORE_CHAR  '\x01' // 在有效的ASCII数字字段中找不到字符
+class Stream : public Print {
+protected:
+    unsigned long _timeout;      // 中止计时读取之前等待下一个字符的毫秒数
+    unsigned long _startMillis;  // 用于超时测量
+    int timedRead();    // 读取流超时
+    int timedPeek();    // 等待流超时
+    int peekNextDigit(LookaheadMode lookahead, bool detectDecimal); // 返回流中的下一个数字，如果超时则返回-1
+public:
     virtual int available() = 0;
     virtual int read() = 0;
     virtual int peek() = 0;
+    Stream() {
+        _timeout = 1000;
+    }
+// 解析流的方法
+    void setTimeout(unsigned long timeout);  // 设置等待流数据的最大毫秒数，默认为1秒
+    unsigned long getTimeout(void) {
+        return _timeout;
+    }
+    bool find(char *target);   // 从流中读取数据，直到找到目标字符串
+    bool find(uint8_t *target) {
+        return find ((char *)target);
+    }
+    // 找到目标字符串则返回true，反之为false
+    bool find(char *target, size_t length);   // 从流中读取数据，直到找到给定长度的目标字符串
+    bool find(uint8_t *target, size_t length) {
+        return find ((char *)target, length);
+    }
+    // 如果找到目标字符串，则返回true；如果超时，则返回false
+    bool find(char target) {
+        return find (&target, 1);
+    }
+    bool findUntil(char *target, char *terminator);   // 如果找到终止符，则搜索结束
+    bool findUntil(uint8_t *target, char *terminator) {
+        return findUntil((char *)target, terminator);
+    }
+    bool findUntil(char *target, size_t targetLen, char *terminate, size_t termLen);   // 如果找到终止字符串，搜索将结束
+    bool findUntil(uint8_t *target, size_t targetLen, char *terminate, size_t termLen) {
+        return findUntil((char *)target, targetLen, terminate, termLen);
+    }
+    long parseInt(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR);
+    // 从当前位置返回第一个有效的long int值，前瞻确定parseInt在流中的前瞻性，可以参阅LookaheadMode枚举。
+    // Lookahead由第一个字符终止，该字符不是整数的有效部分。解析开始后，流中将跳过“忽略”部分。
 
-    Stream() {_timeout=1000;}
+    float parseFloat(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR);
+    // float版本的parseInt
 
-// parsing methods
+    size_t readBytes( char *buffer, size_t length); // 从流中读取字符到缓冲区
+    size_t readBytes( uint8_t *buffer, size_t length) {
+        return readBytes((char *)buffer, length);
+    }
+    //如果已读取长度字符或超时，则终止。返回放置在缓冲区中的字符数。
 
-  void setTimeout(unsigned long timeout);  // sets maximum milliseconds to wait for stream data, default is 1 second
-  unsigned long getTimeout(void) { return _timeout; }
-  
-  bool find(char *target);   // reads data from the stream until the target string is found
-  bool find(uint8_t *target) { return find ((char *)target); }
-  // returns true if target string is found, false if timed out (see setTimeout)
+    size_t readBytesUntil( char terminator, char *buffer, size_t length); // 作为带有终止符的读取字符
+    size_t readBytesUntil( char terminator, uint8_t *buffer, size_t length) {
+        return readBytesUntil(terminator, (char *)buffer, length);
+    }
+    // 如果已读取长度字符，超时或检测到终止符，则终止。返回放置在缓冲区中的字符数。
 
-  bool find(char *target, size_t length);   // reads data from the stream until the target string of given length is found
-  bool find(uint8_t *target, size_t length) { return find ((char *)target, length); }
-  // returns true if target string is found, false if timed out
+    // Arduino字符串函数在这里添加
+    String readString();
+    String readStringUntil(char terminator);
 
-  bool find(char target) { return find (&target, 1); }
+protected:
+    long parseInt(char ignore) {
+        return parseInt(SKIP_ALL, ignore);
+    }
+    float parseFloat(char ignore) {
+        return parseFloat(SKIP_ALL, ignore);
+    }
+    // 这些重载是为了与派生的任何类兼容，以自定义忽略字符流式传输并使用parseFloat / Int。
+    // 保持公共API很简单，这些重载仍受保护。
 
-  bool findUntil(char *target, char *terminator);   // as find but search ends if the terminator string is found
-  bool findUntil(uint8_t *target, char *terminator) { return findUntil((char *)target, terminator); }
+    struct MultiTarget {
+        const char *str;  // 模式串
+        size_t len;       // 模式串长度
+        size_t index;     // 索引
+    };
 
-  bool findUntil(char *target, size_t targetLen, char *terminate, size_t termLen);   // as above but search ends if the terminate string is found
-  bool findUntil(uint8_t *target, size_t targetLen, char *terminate, size_t termLen) {return findUntil((char *)target, targetLen, terminate, termLen); }
-
-  long parseInt(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR);
-  // returns the first valid (long) integer value from the current position.
-  // lookahead determines how parseInt looks ahead in the stream.
-  // See LookaheadMode enumeration at the top of the file.
-  // Lookahead is terminated by the first character that is not a valid part of an integer.
-  // Once parsing commences, 'ignore' will be skipped in the stream.
-
-  float parseFloat(LookaheadMode lookahead = SKIP_ALL, char ignore = NO_IGNORE_CHAR);
-  // float version of parseInt
-
-  size_t readBytes( char *buffer, size_t length); // read chars from stream into buffer
-  size_t readBytes( uint8_t *buffer, size_t length) { return readBytes((char *)buffer, length); }
-  // terminates if length characters have been read or timeout (see setTimeout)
-  // returns the number of characters placed in the buffer (0 means no valid data found)
-
-  size_t readBytesUntil( char terminator, char *buffer, size_t length); // as readBytes with terminator character
-  size_t readBytesUntil( char terminator, uint8_t *buffer, size_t length) { return readBytesUntil(terminator, (char *)buffer, length); }
-  // terminates if length characters have been read, timeout, or if the terminator character  detected
-  // returns the number of characters placed in the buffer (0 means no valid data found)
-
-  // Arduino String functions to be added here
-  String readString();
-  String readStringUntil(char terminator);
-
-  protected:
-  long parseInt(char ignore) { return parseInt(SKIP_ALL, ignore); }
-  float parseFloat(char ignore) { return parseFloat(SKIP_ALL, ignore); }
-  // These overload exists for compatibility with any class that has derived
-  // Stream and used parseFloat/Int with a custom ignore character. To keep
-  // the public API simple, these overload remains protected.
-
-  struct MultiTarget {
-    const char *str;  // string you're searching for
-    size_t len;       // length of string you're searching for
-    size_t index;     // index used by the search routine.
-  };
-
-  // This allows you to search for an arbitrary number of strings.
-  // Returns index of the target that is found first or -1 if timeout occurs.
-  int findMulti(struct MultiTarget *targets, int tCount);
+    // 这可以让您搜索任意数量的字符串。返回最先找到的目标的索引；如果发生超时，则返回-1。
+    int findMulti(struct MultiTarget *targets, int tCount);
 };
 
 #undef NO_IGNORE_CHAR
