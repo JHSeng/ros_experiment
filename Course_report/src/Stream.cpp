@@ -139,8 +139,7 @@ float Stream::parseFloat(LookaheadMode lookahead, char ignore) {
     else　return value;
 }
 // 从流中读取字符到缓冲区.如果已读取长度字符或超时，则终止。
-// 返回放置在缓冲区中的字符数
-// 缓冲区不是以null终止的。
+// 返回放置在缓冲区中的字符数，缓冲区不是以null终止的。
 size_t Stream::readBytes(char *buffer, size_t length) {
     size_t count = 0;
     while (count < length) {
@@ -151,10 +150,8 @@ size_t Stream::readBytes(char *buffer, size_t length) {
     }
     return count;
 }
-// as readBytes with terminator character
-// terminates if length characters have been read, timeout, or if the terminator character  detected
-// returns the number of characters placed in the buffer (0 means no valid data found)
-
+// 作为带有终止符的readBytes。如果已读取长度字符，超时或检测到终止符，则终止。
+// 返回放置在缓冲区中的字符数（0表示找不到有效数据）。
 size_t Stream::readBytesUntil(char terminator, char *buffer, size_t length) {
     if (length < 1) return 0;
     size_t index = 0;
@@ -164,9 +161,10 @@ size_t Stream::readBytesUntil(char terminator, char *buffer, size_t length) {
         *buffer++ = (char)c;
         index++;
     }
-    return index; // return number of characters, not including null terminator
+    // 返回字符数量，不包含空字符
+    return index;
 }
-
+// 逐字符读字符串
 String Stream::readString() {
     String ret;
     int c = timedRead();
@@ -176,7 +174,7 @@ String Stream::readString() {
     }
     return ret;
 }
-
+// 一直读字符串直到遇到terminator这一字符
 String Stream::readStringUntil(char terminator) {
     String ret;
     int c = timedRead();
@@ -186,68 +184,51 @@ String Stream::readStringUntil(char terminator) {
     }
     return ret;
 }
-
+// 寻找多个相同的字符串
 int Stream::findMulti( struct Stream::MultiTarget *targets, int tCount) {
-    // any zero length target string automatically matches and would make
-    // a mess of the rest of the algorithm.
+    // 任何零长度的目标字符串都会自动匹配。其余算法混乱不堪。
     for (struct MultiTarget *t = targets; t < targets + tCount; ++t) {
-        if (t->len <= 0)
-            return t - targets;
+        if (t->len <= 0) return t - targets;
     }
-
     while (1) {
         int c = timedRead();
-        if (c < 0)
-            return -1;
-
+        if (c < 0) return -1;
         for (struct MultiTarget *t = targets; t < targets + tCount; ++t) {
-            // the simple case is if we match, deal with that first.
+            // 最简单的情况是，如果匹配，优先处理。
             if (c == t->str[t->index]) {
                 if (++t->index == t->len)
                     return t - targets;
                 else
                     continue;
             }
-
-            // if not we need to walk back and see if we could have matched further
-            // down the stream (ie '1112' doesn't match the first position in '11112'
-            // but it will match the second position so we can't just reset the current
-            // index to 0 when we find a mismatch.
-            if (t->index == 0)
-                continue;
-
+            // 如果不匹配，则需要往回走，看看是否可以进一步匹配。找到不匹配项时索引为0。
+            if (t->index == 0) continue;
             int origIndex = t->index;
             do {
                 --t->index;
-                // first check if current char works against the new current index
-                if (c != t->str[t->index])
-                    continue;
-
-                // if it's the only char then we're good, nothing more to check
+                // 首先检查当前字符是否适用于新的当前索引
+                if (c != t->str[t->index]) continue;
+                // 如果它是唯一的字符，那么仅需检查即可
                 if (t->index == 0) {
                     t->index++;
                     break;
                 }
-
-                // otherwise we need to check the rest of the found string
+                // 否则需要检查找到的字符串的其余部分
                 int diff = origIndex - t->index;
                 size_t i;
                 for (i = 0; i < t->index; ++i) {
                     if (t->str[i] != t->str[i + diff])
                         break;
                 }
-
-                // if we successfully got through the previous loop then our current
-                // index is good.
+                // 如果我们成功通过上一个循环，那么我们当前索引是好的
                 if (i == t->index) {
                     t->index++;
                     break;
                 }
-
-                // otherwise we just try the next index
+                // 否则我们尝试另一个索引
             } while (t->index);
         }
     }
-    // unreachable
+    // 不可达
     return -1;
 }
