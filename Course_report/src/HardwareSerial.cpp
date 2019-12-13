@@ -49,42 +49,31 @@ void serialEventRun(void) {
 #endif
 }
 
-// macro to guard critical sections when needed for large TX buffer sizes
+// 大型TX缓冲区需要时，使用宏可保护关键部分
 #if (SERIAL_TX_BUFFER_SIZE>256)
 #define TX_BUFFER_ATOMIC ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
 #else
 #define TX_BUFFER_ATOMIC
 #endif
-
-// Actual interrupt handlers //////////////////////////////////////////////////////////////
-
+// 实际中断处理程序 //////////////////////////////////////////////////////////////
 void HardwareSerial::_tx_udr_empty_irq(void) {
-    // If interrupts are enabled, there must be more data in the output
-    // buffer. Send the next byte
+    // 如果启用了中断，则输出中必须有更多数据缓冲以发送下一个字节
     unsigned char c = _tx_buffer[_tx_buffer_tail];
     _tx_buffer_tail = (_tx_buffer_tail + 1) % SERIAL_TX_BUFFER_SIZE;
-
     *_udr = c;
-
-    // clear the TXC bit -- "can be cleared by writing a one to its bit
-    // location". This makes sure flush() won't return until the bytes
-    // actually got written. Other r/w bits are preserved, and zeroes
-    // written to the rest.
-
+    // 清除TXC位-“可以通过在其位写入1来清除location”。这样可以确保flush()直到字节恢复后才会返回。
+    // 实际上是写的。 其他的r/w位被保留，并且作为零写入其余部分。
 #ifdef MPCM0
     *_ucsra = ((*_ucsra) & ((1 << U2X0) | (1 << MPCM0))) | (1 << TXC0);
 #else
     *_ucsra = ((*_ucsra) & ((1 << U2X0) | (1 << TXC0)));
 #endif
-
     if (_tx_buffer_head == _tx_buffer_tail) {
         // Buffer empty, so disable interrupts
         cbi(*_ucsrb, UDRIE0);
     }
 }
-
 // Public Methods //////////////////////////////////////////////////////////////
-
 void HardwareSerial::begin(unsigned long baud, byte config) {
     // Try u2x mode first
     uint16_t baud_setting = (F_CPU / 4 / baud - 1) / 2;
