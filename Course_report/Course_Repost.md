@@ -78,17 +78,89 @@ int main(void) {
 
 `WCharacter.h`比较简单，只是声明并定义了常见字符操作而已。相比之下，`WString.h`声明并定义了关于字符串的常见操作。
 
-## Analysis of HardwareSerial.h
+## Analysis of WMath.cpp
 
-定义了串口动作。这里依赖到`Stream.h`。
+定义了随机种子和随机数等数学函数。
+
+## Analysis of WInterrupts.c
+
+根据芯片种类定义了中断
 
 ## Analysis of Stream.h && Stream.cpp
 
 声明和定义了流操作。
 
-## Analysis of 
+## Analysis of HardwareSerial.h && HardwareSerial.cpp && HardwareSerial_private.h
 
+声明并定义了硬串口操作。
 
+## Analysis of HardwareSerialX.cpp (four files)
+
+四份几乎一样的文件，分别定义了四个硬串口的功能。
+
+## Analysis of new.h && new.cpp
+
+声明并定义new、delete和malloc
+
+## Analysis of wiring.c
+
+定义分频器操作
+
+## Analysis of wiring_private.h
+
+声明和定义底层部分wiring操作
+
+## Analysis of wiring_digital.c && wiring_analog.c
+
+定义数字读写和pwm输出
+
+## Analysis of wiring_pulse.c && wiring_pulse.S 
+
+定义时钟脉冲及其汇编代码
+
+## Analysis of wiring_shift.c
+
+定义了移出移入操作
+
+## Analysis of USBAPI.h && USBCore.h && USBDesc.h && USBCore.cpp
+
+声明并定义USB串口的底层地址、核心逻辑、API和中断。
+
+## Analysis of PluggableUSB.h && PluggableUSB.cpp
+
+声明并定义可挂起USB设备及其接口、描述文件等
+
+## Analysis of abi.cpp
+
+定义了cxa操作。
+
+## Analysis of CDC.cpp
+
+定义了CDC操作
+
+## Analysis of Client.h
+
+定义了客户端操作
+
+## Analysis of IPAddress.h && IPAddress.cpp
+
+声明并定义了IP地址的操作
+
+## Analysis of Print.h && Print.cpp && Printable.h
+
+声明并定义了类打印操作
+
+## Analysis of Server.h
+
+声明了打印服务类
+
+## Analysis of Tone.cpp
+
+定义了计时器tone
+
+## Analysis of Udp.h
+
+声明了udp协议相关操作
 
 ## Reference
 

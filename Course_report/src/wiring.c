@@ -1,392 +1,277 @@
-/*
-  wiring.c - Partial implementation of the Wiring API for the ATmega8.
-  Part of Arduino - http://www.arduino.cc/
-
-  Copyright (c) 2005-2006 David A. Mellis
-
-  This library is free software; you can redistribute it and/or
-  modify it under the terms of the GNU Lesser General Public
-  License as published by the Free Software Foundation; either
-  version 2.1 of the License, or (at your option) any later version.
-
-  This library is distributed in the hope that it will be useful,
-  but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-  Lesser General Public License for more details.
-
-  You should have received a copy of the GNU Lesser General
-  Public License along with this library; if not, write to the
-  Free Software Foundation, Inc., 59 Temple Place, Suite 330,
-  Boston, MA  02111-1307  USA
-*/
-
 #include "wiring_private.h"
-
-// the prescaler is set so that timer0 ticks every 64 clock cycles, and the
-// the overflow handler is called every 256 ticks.
+// 设置预分频器，以便timer0每64个时钟周期滴答一次，而溢出处理程序每256个滴答调用一次。
 #define MICROSECONDS_PER_TIMER0_OVERFLOW (clockCyclesToMicroseconds(64 * 256))
-
-// the whole number of milliseconds per timer0 overflow
+// 每个计时器的总毫秒数0溢出
 #define MILLIS_INC (MICROSECONDS_PER_TIMER0_OVERFLOW / 1000)
-
-// the fractional number of milliseconds per timer0 overflow. we shift right
-// by three to fit these numbers into a byte. (for the clock speeds we care
-// about - 8 and 16 MHz - this doesn't lose precision.)
+// 每个定时器0溢出的小数毫秒数。 我们右移三位以使这些数字适合一个字节。 (对于我们关心的时钟速度-8和16 MHz-这不会丢失精度。)
 #define FRACT_INC ((MICROSECONDS_PER_TIMER0_OVERFLOW % 1000) >> 3)
 #define FRACT_MAX (1000 >> 3)
-
 volatile unsigned long timer0_overflow_count = 0;
 volatile unsigned long timer0_millis = 0;
 static unsigned char timer0_fract = 0;
-
 #if defined(TIM0_OVF_vect)
 ISR(TIM0_OVF_vect)
 #else
 ISR(TIMER0_OVF_vect)
 #endif
 {
-	// copy these to local variables so they can be stored in registers
-	// (volatile variables must be read from memory on every access)
-	unsigned long m = timer0_millis;
-	unsigned char f = timer0_fract;
-
-	m += MILLIS_INC;
-	f += FRACT_INC;
-	if (f >= FRACT_MAX) {
-		f -= FRACT_MAX;
-		m += 1;
-	}
-
-	timer0_fract = f;
-	timer0_millis = m;
-	timer0_overflow_count++;
+    // 将它们复制到局部变量，以便可以将它们存储在寄存器中(每次访问都必须从内存中读取易失性变量)
+    unsigned long m = timer0_millis;
+    unsigned char f = timer0_fract;
+    m += MILLIS_INC;
+    f += FRACT_INC;
+    if (f >= FRACT_MAX) {
+        f -= FRACT_MAX;
+        m += 1;
+    }
+    timer0_fract = f;
+    timer0_millis = m;
+    timer0_overflow_count++;
 }
-
-unsigned long millis()
-{
-	unsigned long m;
-	uint8_t oldSREG = SREG;
-
-	// disable interrupts while we read timer0_millis or we might get an
-	// inconsistent value (e.g. in the middle of a write to timer0_millis)
-	cli();
-	m = timer0_millis;
-	SREG = oldSREG;
-
-	return m;
+unsigned long millis() {
+    unsigned long m;
+    uint8_t oldSREG = SREG;
+    // 在读取timer0_millis时禁用中断，否则我们可能会获得不一致的值(例如，在写入timer0_millis的过程中)
+    cli();
+    m = timer0_millis;
+    SREG = oldSREG;
+    return m;
 }
-
 unsigned long micros() {
-	unsigned long m;
-	uint8_t oldSREG = SREG, t;
-	
-	cli();
-	m = timer0_overflow_count;
+    unsigned long m;
+    uint8_t oldSREG = SREG, t;
+    cli();
+    m = timer0_overflow_count;
 #if defined(TCNT0)
-	t = TCNT0;
+    t = TCNT0;
 #elif defined(TCNT0L)
-	t = TCNT0L;
+    t = TCNT0L;
 #else
-	#error TIMER 0 not defined
+#error TIMER 0 not defined
 #endif
 
 #ifdef TIFR0
-	if ((TIFR0 & _BV(TOV0)) && (t < 255))
-		m++;
+    if ((TIFR0 & _BV(TOV0)) && (t < 255)) m++;
 #else
-	if ((TIFR & _BV(TOV0)) && (t < 255))
-		m++;
+    if ((TIFR & _BV(TOV0)) && (t < 255)) m++;
 #endif
-
-	SREG = oldSREG;
-	
-	return ((m << 8) + t) * (64 / clockCyclesPerMicrosecond());
+    SREG = oldSREG;
+    return ((m << 8) + t) * (64 / clockCyclesPerMicrosecond());
 }
-
-void delay(unsigned long ms)
-{
-	uint32_t start = micros();
-
-	while (ms > 0) {
-		yield();
-		while ( ms > 0 && (micros() - start) >= 1000) {
-			ms--;
-			start += 1000;
-		}
-	}
+void delay(unsigned long ms) {
+    uint32_t start = micros();
+    while (ms > 0) {
+        yield();
+        while ( ms > 0 && (micros() - start) >= 1000) {
+            ms--;
+            start += 1000;
+        }
+    }
 }
-
-/* Delay for the given number of microseconds.  Assumes a 1, 8, 12, 16, 20 or 24 MHz clock. */
-void delayMicroseconds(unsigned int us)
-{
-	// call = 4 cycles + 2 to 4 cycles to init us(2 for constant delay, 4 for variable)
-
-	// calling avrlib's delay_us() function with low values (e.g. 1 or
-	// 2 microseconds) gives delays longer than desired.
-	//delay_us(us);
+// 延迟给定的微秒数。 假设1、8、12、16、20或24 MHz时钟。
+void delayMicroseconds(unsigned int us) {
+    // 调用= 4个周期+ 2到4个周期来初始化us(2表示恒定延迟，4表示变量)
+    // 以较低的值(例如1或2微秒)呼叫avrlib的delay_us()函数会产生比预期更长的延迟。
 #if F_CPU >= 24000000L
-	// for the 24 MHz clock for the aventurous ones, trying to overclock
-
-	// zero delay fix
-	if (!us) return; //  = 3 cycles, (4 when true)
-
-	// the following loop takes a 1/6 of a microsecond (4 cycles)
-	// per iteration, so execute it six times for each microsecond of
-	// delay requested.
-	us *= 6; // x6 us, = 7 cycles
-
-	// account for the time taken in the preceeding commands.
-	// we just burned 22 (24) cycles above, remove 5, (5*4=20)
-	// us is at least 6 so we can substract 5
-	us -= 5; //=2 cycles
-
+    // 对于有冒险精神的24 MHz时钟，尝试超频零延迟修复
+    if (!us) return;
+    // 接下来的循环每次迭代花费1/6微秒(4个周期)，因此对于所请求的每微秒延迟执行6次。
+    us *= 6;
+    // 占前面命令中花费的时间。 我们只是烧掉了22(24)个以上的周期，删除了5个(5 * 4 = 20)我们至少是6个，所以我们可以减去5个
+    us -= 5;
 #elif F_CPU >= 20000000L
-	// for the 20 MHz clock on rare Arduino boards
-
-	// for a one-microsecond delay, simply return.  the overhead
-	// of the function call takes 18 (20) cycles, which is 1us
-	__asm__ __volatile__ (
-		"nop" "\n\t"
-		"nop" "\n\t"
-		"nop" "\n\t"
-		"nop"); //just waiting 4 cycles
-	if (us <= 1) return; //  = 3 cycles, (4 when true)
-
-	// the following loop takes a 1/5 of a microsecond (4 cycles)
-	// per iteration, so execute it five times for each microsecond of
-	// delay requested.
-	us = (us << 2) + us; // x5 us, = 7 cycles
-
-	// account for the time taken in the preceeding commands.
-	// we just burned 26 (28) cycles above, remove 7, (7*4=28)
-	// us is at least 10 so we can substract 7
-	us -= 7; // 2 cycles
-
+    // 用于罕见的Arduino板上的20 MHz时钟
+    // 延迟一微秒，只需返回即可。 函数调用的开销需要18(20)个周期，即1us
+    __asm__ __volatile__ (
+        "nop" "\n\t"
+        "nop" "\n\t"
+        "nop" "\n\t"
+        "nop"); // 只等了4个周期
+    if (us <= 1) return;
+    // 接下来的循环每次迭代花费1/5微秒(4个周期)，因此对于所请求的每微秒延迟执行5次。
+    us = (us << 2) + us;
+    // 占前面命令中花费的时间。
+    // 我们只燃烧了26(28)个以上的周期，删除了7(7 * 4 = 28)个至少10个，所以我们可以减去7
+    us -= 7;
 #elif F_CPU >= 16000000L
-	// for the 16 MHz clock on most Arduino boards
-
-	// for a one-microsecond delay, simply return.  the overhead
-	// of the function call takes 14 (16) cycles, which is 1us
-	if (us <= 1) return; //  = 3 cycles, (4 when true)
-
-	// the following loop takes 1/4 of a microsecond (4 cycles)
-	// per iteration, so execute it four times for each microsecond of
-	// delay requested.
-	us <<= 2; // x4 us, = 4 cycles
-
-	// account for the time taken in the preceeding commands.
-	// we just burned 19 (21) cycles above, remove 5, (5*4=20)
-	// us is at least 8 so we can substract 5
-	us -= 5; // = 2 cycles,
-
+    // 适用于大多数Arduino开发板上的16 MHz时钟
+    // 延迟一微秒，只需返回即可。 函数调用的开销需要14(16)个周期，即1us
+    if (us <= 1) return;
+    // 接下来的循环每次迭代需要1/4微秒(4个周期)，因此对于请求的每微秒延迟，请执行四次。
+    us <<= 2;
+    // 占前面命令中花费的时间。
+    // 我们只是烧掉了上面的19(21)个周期，删除了5(5 * 4 = 20)个，所以我们至少是8，所以我们可以减去5
+    us -= 5;
 #elif F_CPU >= 12000000L
-	// for the 12 MHz clock if somebody is working with USB
-
-	// for a 1 microsecond delay, simply return.  the overhead
-	// of the function call takes 14 (16) cycles, which is 1.5us
-	if (us <= 1) return; //  = 3 cycles, (4 when true)
-
-	// the following loop takes 1/3 of a microsecond (4 cycles)
-	// per iteration, so execute it three times for each microsecond of
-	// delay requested.
-	us = (us << 1) + us; // x3 us, = 5 cycles
-
-	// account for the time taken in the preceeding commands.
-	// we just burned 20 (22) cycles above, remove 5, (5*4=20)
-	// us is at least 6 so we can substract 5
-	us -= 5; //2 cycles
-
+    // 如果有人使用USB，则为12 MHz时钟
+    // 对于1微秒的延迟，只需返回即可。 函数调用的开销需要14(16)个周期，即1.5us
+    if (us <= 1) return;
+    // 接下来的循环每次迭代耗时1/3微秒(4个周期)，因此对于所请求的每微秒延迟执行3次。
+    us = (us << 1) + us;
+    // 占前面命令中花费的时间。
+    // 我们只烧了20(22)个以上的周期，删除5，(5 * 4 = 20)我们至少是6，所以我们可以减去5
+    us -= 5;
 #elif F_CPU >= 8000000L
-	// for the 8 MHz internal clock
-
-	// for a 1 and 2 microsecond delay, simply return.  the overhead
-	// of the function call takes 14 (16) cycles, which is 2us
-	if (us <= 2) return; //  = 3 cycles, (4 when true)
-
-	// the following loop takes 1/2 of a microsecond (4 cycles)
-	// per iteration, so execute it twice for each microsecond of
-	// delay requested.
-	us <<= 1; //x2 us, = 2 cycles
-
-	// account for the time taken in the preceeding commands.
-	// we just burned 17 (19) cycles above, remove 4, (4*4=16)
-	// us is at least 6 so we can substract 4
-	us -= 4; // = 2 cycles
-
+    // 用于8 MHz内部时钟
+    // 对于1和2微秒的延迟，只需返回即可。 函数调用的开销需要14(16)个周期，即2us
+    if (us <= 2) return;
+    // 接下来的循环每次迭代需要1/2微秒(4个周期)，因此对于所请求的每微秒延迟执行两次。
+    us <<= 1; //x2 us, = 2 cycles
+    // 占前面命令中花费的时间。
+    // 我们只是在上面烧了17(19)个周期，删除4，(4 * 4 = 16)，我们至少是6，所以我们可以减去4
+    us -= 4;
 #else
-	// for the 1 MHz internal clock (default settings for common Atmega microcontrollers)
+    // 用于1 MHz内部时钟(常见的Atmega微控制器的默认设置)
+    // 函数调用的开销为14(16)周期
+    if (us <= 16) return
+            if (us <= 25) return, (must be at least 25 if we want to substract 22)
 
-	// the overhead of the function calls is 14 (16) cycles
-	if (us <= 16) return; //= 3 cycles, (4 when true)
-	if (us <= 25) return; //= 3 cycles, (4 when true), (must be at least 25 if we want to substract 22)
-
-	// compensate for the time taken by the preceeding and next commands (about 22 cycles)
-	us -= 22; // = 2 cycles
-	// the following loop takes 4 microseconds (4 cycles)
-	// per iteration, so execute it us/4 times
-	// us is at least 4, divided by 4 gives us 1 (no zero delay bug)
-	us >>= 2; // us div 4, = 4 cycles
-	
-
+                    // 补偿上一条和下一条命令所花费的时间(大约22个周期)
+                    us -= 22;
+    // 接下来的循环每次迭代需要4微秒(4个周期)，因此执行us / 4至少为4，除以4得到1(没有零延迟错误)
+    us >>= 2;
 #endif
-
-	// busy wait
-	__asm__ __volatile__ (
-		"1: sbiw %0,1" "\n\t" // 2 cycles
-		"brne 1b" : "=w" (us) : "0" (us) // 2 cycles
-	);
-	// return = 4 cycles
+    // 忙等待
+    __asm__ __volatile__ (
+        "1: sbiw %0,1" "\n\t"
+        "brne 1b" : "=w" (us) : "0" (us)
+    );
 }
-
-void init()
-{
-	// this needs to be called before setup() or some functions won't
-	// work there
-	sei();
-	
-	// on the ATmega168, timer 0 is also used for fast hardware pwm
-	// (using phase-correct PWM would mean that timer 0 overflowed half as often
-	// resulting in different millis() behavior on the ATmega8 and ATmega168)
+void init() {
+    // 这需要在setup()之前调用，否则某些功能将无法正常运行
+    sei();
+    // 在ATmega168上，定时器0也用于快速硬件pwm(使用相位校正PWM意味着定时器0溢出的频率是原来的一半，导致ATmega8和ATmega168上的millis()行为不同)
 #if defined(TCCR0A) && defined(WGM01)
-	sbi(TCCR0A, WGM01);
-	sbi(TCCR0A, WGM00);
+    sbi(TCCR0A, WGM01);
+    sbi(TCCR0A, WGM00);
 #endif
-
-	// set timer 0 prescale factor to 64
+    // 将定时器0预分频因子设置为64
 #if defined(__AVR_ATmega128__)
-	// CPU specific: different values for the ATmega128
-	sbi(TCCR0, CS02);
+    // CPU特定：ATmega128的不同值
+    sbi(TCCR0, CS02);
 #elif defined(TCCR0) && defined(CS01) && defined(CS00)
-	// this combination is for the standard atmega8
-	sbi(TCCR0, CS01);
-	sbi(TCCR0, CS00);
+    // 适用于 atmega8 的标准
+    sbi(TCCR0, CS01);
+    sbi(TCCR0, CS00);
 #elif defined(TCCR0B) && defined(CS01) && defined(CS00)
-	// this combination is for the standard 168/328/1280/2560
-	sbi(TCCR0B, CS01);
-	sbi(TCCR0B, CS00);
+    // 适用于 168/328/1280/2560 的标准
+    sbi(TCCR0B, CS01);
+    sbi(TCCR0B, CS00);
 #elif defined(TCCR0A) && defined(CS01) && defined(CS00)
-	// this combination is for the __AVR_ATmega645__ series
-	sbi(TCCR0A, CS01);
-	sbi(TCCR0A, CS00);
+    // 适用于 __AVR_ATmega645__ 系列
+    sbi(TCCR0A, CS01);
+    sbi(TCCR0A, CS00);
 #else
-	#error Timer 0 prescale factor 64 not set correctly
+#error Timer 0 prescale factor 64 not set correctly
 #endif
 
-	// enable timer 0 overflow interrupt
+    // 启用定时器0溢出中断
 #if defined(TIMSK) && defined(TOIE0)
-	sbi(TIMSK, TOIE0);
+    sbi(TIMSK, TOIE0);
 #elif defined(TIMSK0) && defined(TOIE0)
-	sbi(TIMSK0, TOIE0);
+    sbi(TIMSK0, TOIE0);
 #else
-	#error	Timer 0 overflow interrupt not set correctly
+#error  Timer 0 overflow interrupt not set correctly
 #endif
-
-	// timers 1 and 2 are used for phase-correct hardware pwm
-	// this is better for motors as it ensures an even waveform
-	// note, however, that fast pwm mode can achieve a frequency of up
-	// 8 MHz (with a 16 MHz clock) at 50% duty cycle
-
+    // 定时器1和2用于相位校正硬件pwm
+    // 这对于电动机来说更好，因为它可以确保均匀的波形记录，但是，快速的pwm模式可以在占空比为50％的情况下达到高达8 MHz的频率(时钟为16 MHz)
 #if defined(TCCR1B) && defined(CS11) && defined(CS10)
-	TCCR1B = 0;
-
-	// set timer 1 prescale factor to 64
-	sbi(TCCR1B, CS11);
+    TCCR1B = 0;
+    // 将计时器1的预分频因子设置为64
+    sbi(TCCR1B, CS11);
 #if F_CPU >= 8000000L
-	sbi(TCCR1B, CS10);
+    sbi(TCCR1B, CS10);
 #endif
 #elif defined(TCCR1) && defined(CS11) && defined(CS10)
-	sbi(TCCR1, CS11);
+    sbi(TCCR1, CS11);
 #if F_CPU >= 8000000L
-	sbi(TCCR1, CS10);
+    sbi(TCCR1, CS10);
 #endif
 #endif
-	// put timer 1 in 8-bit phase correct pwm mode
+    // 将定时器1置于8位相位校正pwm模式
 #if defined(TCCR1A) && defined(WGM10)
-	sbi(TCCR1A, WGM10);
+    sbi(TCCR1A, WGM10);
 #endif
 
-	// set timer 2 prescale factor to 64
+    // 将计时器2的预分频因子设置为64
 #if defined(TCCR2) && defined(CS22)
-	sbi(TCCR2, CS22);
+    sbi(TCCR2, CS22);
 #elif defined(TCCR2B) && defined(CS22)
-	sbi(TCCR2B, CS22);
+    sbi(TCCR2B, CS22);
 //#else
-	// Timer 2 not finished (may not be present on this CPU)
+    // 计时器2未完成(此CPU上可能不存在)
 #endif
 
-	// configure timer 2 for phase correct pwm (8-bit)
+    // 将定时器2置于8位相位校正pwm模式
 #if defined(TCCR2) && defined(WGM20)
-	sbi(TCCR2, WGM20);
+    sbi(TCCR2, WGM20);
 #elif defined(TCCR2A) && defined(WGM20)
-	sbi(TCCR2A, WGM20);
+    sbi(TCCR2A, WGM20);
 //#else
-	// Timer 2 not finished (may not be present on this CPU)
+    // 计时器2未完成(此CPU上可能不存在)
 #endif
 
 #if defined(TCCR3B) && defined(CS31) && defined(WGM30)
-	sbi(TCCR3B, CS31);		// set timer 3 prescale factor to 64
-	sbi(TCCR3B, CS30);
-	sbi(TCCR3A, WGM30);		// put timer 3 in 8-bit phase correct pwm mode
+    sbi(TCCR3B, CS31);      // 将计时器3的预分频因子设置为64
+    sbi(TCCR3B, CS30);
+    sbi(TCCR3A, WGM30);     // 将定时器3置于8位相位校正pwm模式
 #endif
 
 #if defined(TCCR4A) && defined(TCCR4B) && defined(TCCR4D) /* beginning of timer4 block for 32U4 and similar */
-	sbi(TCCR4B, CS42);		// set timer4 prescale factor to 64
-	sbi(TCCR4B, CS41);
-	sbi(TCCR4B, CS40);
-	sbi(TCCR4D, WGM40);		// put timer 4 in phase- and frequency-correct PWM mode	
-	sbi(TCCR4A, PWM4A);		// enable PWM mode for comparator OCR4A
-	sbi(TCCR4C, PWM4D);		// enable PWM mode for comparator OCR4D
-#else /* beginning of timer4 block for ATMEGA1280 and ATMEGA2560 */
+    sbi(TCCR4B, CS42);      // 将计时器4的预分频因子设置为64
+    sbi(TCCR4B, CS41);
+    sbi(TCCR4B, CS40);
+    sbi(TCCR4D, WGM40);     // 将计时器4置于相位和频率校正PWM模式
+    sbi(TCCR4A, PWM4A);     // 使能比较器OCR4A的PWM模式
+    sbi(TCCR4C, PWM4D);     // 为比较器OCR4D启用PWM模式
+#else /* ATMEGA1280和ATMEGA2560的timer4块的开始 */
 #if defined(TCCR4B) && defined(CS41) && defined(WGM40)
-	sbi(TCCR4B, CS41);		// set timer 4 prescale factor to 64
-	sbi(TCCR4B, CS40);
-	sbi(TCCR4A, WGM40);		// put timer 4 in 8-bit phase correct pwm mode
+    sbi(TCCR4B, CS41);      // 将计时器4的预分频因子设置为64
+    sbi(TCCR4B, CS40);
+    sbi(TCCR4A, WGM40);     // 将定时器4置于8位相位校正pwm模式
 #endif
-#endif /* end timer4 block for ATMEGA1280/2560 and similar */	
+#endif /* 用于ATMEGA1280 / 2560和类似设备的end timer4块 */
 
 #if defined(TCCR5B) && defined(CS51) && defined(WGM50)
-	sbi(TCCR5B, CS51);		// set timer 5 prescale factor to 64
-	sbi(TCCR5B, CS50);
-	sbi(TCCR5A, WGM50);		// put timer 5 in 8-bit phase correct pwm mode
+    sbi(TCCR5B, CS51);      // 将计时器5的预分频因子设置为64
+    sbi(TCCR5B, CS50);
+    sbi(TCCR5A, WGM50);     // 将定时器5置于8位相位校正pwm模式
 #endif
 
 #if defined(ADCSRA)
-	// set a2d prescaler so we are inside the desired 50-200 KHz range.
-	#if F_CPU >= 16000000 // 16 MHz / 128 = 125 KHz
-		sbi(ADCSRA, ADPS2);
-		sbi(ADCSRA, ADPS1);
-		sbi(ADCSRA, ADPS0);
-	#elif F_CPU >= 8000000 // 8 MHz / 64 = 125 KHz
-		sbi(ADCSRA, ADPS2);
-		sbi(ADCSRA, ADPS1);
-		cbi(ADCSRA, ADPS0);
-	#elif F_CPU >= 4000000 // 4 MHz / 32 = 125 KHz
-		sbi(ADCSRA, ADPS2);
-		cbi(ADCSRA, ADPS1);
-		sbi(ADCSRA, ADPS0);
-	#elif F_CPU >= 2000000 // 2 MHz / 16 = 125 KHz
-		sbi(ADCSRA, ADPS2);
-		cbi(ADCSRA, ADPS1);
-		cbi(ADCSRA, ADPS0);
-	#elif F_CPU >= 1000000 // 1 MHz / 8 = 125 KHz
-		cbi(ADCSRA, ADPS2);
-		sbi(ADCSRA, ADPS1);
-		sbi(ADCSRA, ADPS0);
-	#else // 128 kHz / 2 = 64 KHz -> This is the closest you can get, the prescaler is 2
-		cbi(ADCSRA, ADPS2);
-		cbi(ADCSRA, ADPS1);
-		sbi(ADCSRA, ADPS0);
-	#endif
-	// enable a2d conversions
-	sbi(ADCSRA, ADEN);
+    // 设置a2d预分频器，使我们处于所需的50-200 KHz范围内。
+#if F_CPU >= 16000000
+    sbi(ADCSRA, ADPS2);
+    sbi(ADCSRA, ADPS1);
+    sbi(ADCSRA, ADPS0);
+#elif F_CPU >= 8000000
+    sbi(ADCSRA, ADPS2);
+    sbi(ADCSRA, ADPS1);
+    cbi(ADCSRA, ADPS0);
+#elif F_CPU >= 4000000
+    sbi(ADCSRA, ADPS2);
+    cbi(ADCSRA, ADPS1);
+    sbi(ADCSRA, ADPS0);
+#elif F_CPU >= 2000000
+    sbi(ADCSRA, ADPS2);
+    cbi(ADCSRA, ADPS1);
+    cbi(ADCSRA, ADPS0);
+#elif F_CPU >= 1000000
+    cbi(ADCSRA, ADPS2);
+    sbi(ADCSRA, ADPS1);
+    sbi(ADCSRA, ADPS0);
+#else
+    cbi(ADCSRA, ADPS2);
+    cbi(ADCSRA, ADPS1);
+    sbi(ADCSRA, ADPS0);
 #endif
-
-	// the bootloader connects pins 0 and 1 to the USART; disconnect them
-	// here so they can be used as normal digital i/o; they will be
-	// reconnected in Serial.begin()
+    // 启用a2d转换
+    sbi(ADCSRA, ADEN);
+#endif
+    // 引导程序将引脚0和1连接到USART;在这里断开它们的连接，以便可以将它们用作普通的数字输入/输出; 它们将在Serial.begin()中重新连接
 #if defined(UCSRB)
-	UCSRB = 0;
+    UCSRB = 0;
 #elif defined(UCSR0B)
-	UCSR0B = 0;
+    UCSR0B = 0;
 #endif
 }
