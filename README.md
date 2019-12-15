@@ -7,6 +7,7 @@ There are three experiments in total:
 - Robot OS program design  
 - Arduino Bot building  
 - RaspberryPi Bot building  
+
 All these experiments are easy to be done.  
 
 Author: TzeHim Sung
